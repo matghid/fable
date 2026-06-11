@@ -190,6 +190,7 @@
 
   function boot() {
     Sprites.build();
+    if (window.Assets) Assets.load();
     const canvas = document.getElementById('game');
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;

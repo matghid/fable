@@ -625,10 +625,23 @@
       }
     }
 
-    const spr = p.moral <= -40 ? Sprites.heroEvil : Sprites.hero;
     const bob = Math.sin(p.anim) * 1.5;
     if (p.hurtCd > 0 && Math.sin(G.time * 30) > 0) ctx.globalAlpha = 0.5;
-    drawSprite(ctx, Sprites.frameOf(spr, p), sx, sy + 4 + bob, p.face === 'left', 2);
+    if (window.Assets && Assets.ready('hero_sheet')) {
+      // sprite sheet esterna: colonne 0 fermo, 1-2 camminata, 3 attacco;
+      // righe 0 giù, 1 sinistra, 2 destra, 3 su — frame 32x48
+      const sheet = Assets.img('hero_sheet');
+      const FW = 32, FH = 48;
+      const row = { down: 0, left: 1, right: 2, up: 3 }[p.face] || 0;
+      let col = 0;
+      if (p.swing > 0) col = 3;
+      else if (p.moving) col = 1 + Math.floor(p.anim * 0.6) % 2;
+      ctx.drawImage(sheet, col * FW, row * FH, FW, FH,
+        Math.round(sx - FW / 2), Math.round(sy + 8 + bob - FH), FW, FH);
+    } else {
+      const spr = p.moral <= -40 ? Sprites.heroEvil : Sprites.hero;
+      drawSprite(ctx, Sprites.frameOf(spr, p), sx, sy + 4 + bob, p.face === 'left', 2);
+    }
     ctx.globalAlpha = 1;
 
     // fendente
@@ -744,11 +757,15 @@
   /* ------------------------------------------------ pannelli */
 
   function panel(ctx, x, y, w, h, title) {
-    ctx.fillStyle = 'rgba(16,14,24,0.93)';
-    ctx.fillRect(x, y, w, h);
-    ctx.strokeStyle = '#caa86a';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+    if (window.Assets && Assets.ready('ui_frame')) {
+      Assets.nineSlice(ctx, Assets.img('ui_frame'), x, y, w, h, 24, 18);
+    } else {
+      ctx.fillStyle = 'rgba(16,14,24,0.93)';
+      ctx.fillRect(x, y, w, h);
+      ctx.strokeStyle = '#caa86a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x + 3, y + 3, w - 6, h - 6);
+    }
     if (title) {
       ctx.font = FONT_L;
       ctx.textAlign = 'center';
@@ -955,32 +972,40 @@
   }
 
   function drawTitle(ctx, G, Game, W, H) {
-    // cielo al tramonto
-    const sky = ctx.createLinearGradient(0, 0, 0, H);
-    sky.addColorStop(0, '#1a1430');
-    sky.addColorStop(0.55, '#3a2440');
-    sky.addColorStop(0.8, '#7a4434');
-    sky.addColorStop(1, '#b56247');
-    ctx.fillStyle = sky;
-    ctx.fillRect(0, 0, W, H);
-    // sole basso
-    ctx.fillStyle = 'rgba(255,200,110,0.8)';
-    ctx.beginPath();
-    ctx.arc(W * 0.72, H * 0.62, 34, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,200,110,0.25)';
-    ctx.beginPath();
-    ctx.arc(W * 0.72, H * 0.62, 60, 0, Math.PI * 2);
-    ctx.fill();
-    // colline
-    ctx.fillStyle = '#26361e';
-    ctx.beginPath();
-    ctx.ellipse(W * 0.3, H * 1.02, 460, 200, 0, Math.PI, 0);
-    ctx.fill();
-    ctx.fillStyle = '#1a2814';
-    ctx.beginPath();
-    ctx.ellipse(W * 0.78, H * 1.08, 480, 240, 0, Math.PI, 0);
-    ctx.fill();
+    const hasBg = window.Assets && Assets.ready('bg_title');
+    if (hasBg) {
+      ctx.drawImage(Assets.img('bg_title'), 0, 0, W, H);
+      // velo scuro perché il testo resti leggibile
+      ctx.fillStyle = 'rgba(10,8,20,0.25)';
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      // cielo al tramonto
+      const sky = ctx.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, '#1a1430');
+      sky.addColorStop(0.55, '#3a2440');
+      sky.addColorStop(0.8, '#7a4434');
+      sky.addColorStop(1, '#b56247');
+      ctx.fillStyle = sky;
+      ctx.fillRect(0, 0, W, H);
+      // sole basso
+      ctx.fillStyle = 'rgba(255,200,110,0.8)';
+      ctx.beginPath();
+      ctx.arc(W * 0.72, H * 0.62, 34, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,200,110,0.25)';
+      ctx.beginPath();
+      ctx.arc(W * 0.72, H * 0.62, 60, 0, Math.PI * 2);
+      ctx.fill();
+      // colline
+      ctx.fillStyle = '#26361e';
+      ctx.beginPath();
+      ctx.ellipse(W * 0.3, H * 1.02, 460, 200, 0, Math.PI, 0);
+      ctx.fill();
+      ctx.fillStyle = '#1a2814';
+      ctx.beginPath();
+      ctx.ellipse(W * 0.78, H * 1.08, 480, 240, 0, Math.PI, 0);
+      ctx.fill();
+    }
 
     ctx.font = FONT_XL;
     ctx.textAlign = 'center';
@@ -1008,14 +1033,22 @@
     ctx.font = FONT_S;
     ctx.fillText('Su/Giù: scegli   Invio: conferma', W / 2, yy + 20);
 
-    // eroe e cane in controluce sulla collina
-    drawSprite(ctx, Sprites.hero.a, W / 2 - 20, H - 92, false, 4);
-    drawSprite(ctx, Sprites.dog.a, W / 2 + 56, H - 96, true, 3);
+    // eroe e cane in controluce sulla collina (solo nella versione procedurale)
+    if (!hasBg) {
+      drawSprite(ctx, Sprites.hero.a, W / 2 - 20, H - 92, false, 4);
+      drawSprite(ctx, Sprites.dog.a, W / 2 + 56, H - 96, true, 3);
+    }
   }
 
   function drawIntro(ctx, G, W, H) {
-    ctx.fillStyle = '#0c0a14';
-    ctx.fillRect(0, 0, W, H);
+    if (window.Assets && Assets.ready('bg_intro')) {
+      ctx.drawImage(Assets.img('bg_intro'), 0, 0, W, H);
+      ctx.fillStyle = 'rgba(12,10,20,0.6)';
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      ctx.fillStyle = '#0c0a14';
+      ctx.fillRect(0, 0, W, H);
+    }
     ctx.font = FONT_M;
     ctx.textAlign = 'center';
     let yy = 90;
@@ -1031,8 +1064,15 @@
 
   function drawEnding(ctx, G, W, H) {
     const good = G.ending === 'good';
-    ctx.fillStyle = good ? '#1a2030' : '#200a0e';
-    ctx.fillRect(0, 0, W, H);
+    const bgKey = good ? 'bg_ending_good' : 'bg_ending_evil';
+    if (window.Assets && Assets.ready(bgKey)) {
+      ctx.drawImage(Assets.img(bgKey), 0, 0, W, H);
+      ctx.fillStyle = good ? 'rgba(20,25,45,0.55)' : 'rgba(30,8,12,0.55)';
+      ctx.fillRect(0, 0, W, H);
+    } else {
+      ctx.fillStyle = good ? '#1a2030' : '#200a0e';
+      ctx.fillRect(0, 0, W, H);
+    }
     ctx.font = FONT_XL;
     ctx.textAlign = 'center';
     ctx.fillStyle = good ? '#ffe9a0' : '#e04a4a';

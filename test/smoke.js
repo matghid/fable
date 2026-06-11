@@ -65,7 +65,7 @@ function load(file) {
   vm.runInContext(code, sandbox, { filename: file });
 }
 
-['js/sprites.js', 'js/maps.js', 'js/data.js', 'js/game.js', 'js/ui.js', 'js/main.js'].forEach(load);
+['js/assets.js', 'js/sprites.js', 'js/maps.js', 'js/data.js', 'js/game.js', 'js/ui.js', 'js/main.js'].forEach(load);
 
 const W = sandbox.window;
 const Game = W.Game;
