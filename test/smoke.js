@@ -12,7 +12,9 @@ function ctx2d() {
   return new Proxy({}, {
     get(t, prop) {
       if (prop === 'measureText') return () => ({ width: 10 });
-      if (prop === 'createLinearGradient') return () => ({ addColorStop: noop });
+      if (prop === 'createLinearGradient' || prop === 'createRadialGradient' || prop === 'createConicGradient') {
+        return () => ({ addColorStop: noop });
+      }
       if (prop === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) });
       if (typeof prop === 'string') {
         if (!(prop in t)) t[prop] = noop;
@@ -239,6 +241,7 @@ teleportNear('farmer');
 tap('e'); frames(2); runDialog();
 check(G.quests.s_chicken.state === 1, 'missione delle galline attivata');
 for (const c of G.region.chickens) {
+  c.vx = 0; c.vy = 0; c.t = 999; // ferma la gallina: il test deve essere deterministico
   G.player.x = c.x; G.player.y = c.y;
   tap('e'); frames(2);
   if (G.quests.s_chicken.count >= 3) break;

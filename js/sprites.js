@@ -1,4 +1,6 @@
-/* sprites.js — pixel art generata proceduralmente su canvas */
+/* sprites.js — pixel art generata proceduralmente su canvas.
+   Tecniche: selout (contorno selettivo), hue shifting (ombre fredde,
+   luci calde), luce dall'alto, due frame di camminata per personaggio. */
 (function () {
   const S = {};
 
@@ -8,170 +10,331 @@
     return c;
   }
 
+  /* hue shifting: scurire vira al blu-viola, schiarire al giallo caldo */
+  function shade(hex, f) {
+    let r, g, b;
+    if (hex[0] === '#') {
+      const n = parseInt(hex.slice(1), 16);
+      r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
+    } else { return hex; }
+    if (f < 1) {
+      r = r * f * 0.88; g = g * f * 0.94; b = Math.min(255, b * f * 1.22 + 12);
+    } else {
+      r = Math.min(255, r * f * 1.08 + 10); g = Math.min(255, g * f + 4); b = Math.min(255, b * f * 0.9);
+    }
+    return 'rgb(' + (r | 0) + ',' + (g | 0) + ',' + (b | 0) + ')';
+  }
+  S.shade = shade;
+
+  /* Disegna righe di caratteri con palette, selout e luce dall'alto */
   function sprite(rows, pal) {
     const h = rows.length;
     let w = 0;
     for (const r of rows) w = Math.max(w, r.length);
-    const c = cv(w, h);
-    const x = c.getContext('2d');
+    const grid = [];
     for (let j = 0; j < h; j++) {
-      for (let i = 0; i < rows[j].length; i++) {
+      grid.push([]);
+      for (let i = 0; i < w; i++) {
         const ch = rows[j][i];
-        if (ch === '.' || ch === ' ') continue;
-        const col = pal[ch];
+        grid[j][i] = (ch && ch !== '.' && ch !== ' ' && pal[ch]) ? pal[ch] : null;
+      }
+    }
+    const c = cv(w + 2, h + 2); // margine per il selout
+    const x = c.getContext('2d');
+    const at = (i, j) => (i >= 0 && j >= 0 && i < w && j < h) ? grid[j][i] : null;
+
+    // selout: bordo nel colore scurito del pixel adiacente
+    for (let j = -1; j <= h; j++) {
+      for (let i = -1; i <= w; i++) {
+        if (at(i, j)) continue;
+        const nb = at(i, j - 1) || at(i, j + 1) || at(i - 1, j) || at(i + 1, j);
+        if (nb) { x.fillStyle = shade(nb, 0.38); x.fillRect(i + 1, j + 1, 1, 1); }
+      }
+    }
+    // pixel con luce dall'alto
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const col = grid[j][i];
         if (!col) continue;
-        x.fillStyle = col;
-        x.fillRect(i, j, 1, 1);
+        x.fillStyle = !at(i, j - 1) ? shade(col, 1.22) : col;
+        x.fillRect(i + 1, j + 1, 1, 1);
       }
     }
     return c;
   }
 
-  /* Umanoide 12x16 (più 2 righe extra se ha le corna) */
+  /* ---------------- umanoide 16x24, due frame ---------------- */
+
+  const HEAD_TORSO = [
+    '................',
+    '.....hhhhhh.....',
+    '....hhhhhhhh....',
+    '...hhhhhhhhhh...',
+    '...hhsssssshh...',
+    '...hssessessh...',
+    '....ssssssss....',
+    '....ssssssss....',
+    '.....ssssss.....',
+    '....tttttttt....',
+    '...tttttttttt...',
+    '..s.tttttttt.s..',
+    '..s.tttttttt.s..',
+    '..s.ttbbbbtt.s..',
+    '....tttttttt....',
+    '....tttttttt....'
+  ];
+
+  const LEGS_A = [
+    '....llllllll....',
+    '....lll..lll....',
+    '....lll..lll....',
+    '....lll..lll....',
+    '....lll..lll....',
+    '....ooo..ooo....',
+    '...oooo..oooo...',
+    '................'
+  ];
+
+  const LEGS_B = [
+    '....llllllll....',
+    '....lll..lll....',
+    '....lll..lll....',
+    '....ooo..lll....',
+    '...oooo..lll....',
+    '.........ooo....',
+    '........oooo....',
+    '................'
+  ];
+
+  const SKIRT = [
+    '...tttttttttt...',
+    '...dddddddddd...',
+    '...dddddddddd...',
+    '....dddddddd....',
+    '....ss....ss....',
+    '....oo....oo....',
+    '................',
+    '................'
+  ];
+
   function human(o) {
-    let rows = [
-      '....hhhh....',
-      '...hhhhhh...',
-      '...hssssh...',
-      '...sseess...',
-      '....ssss....',
-      '...tttttt...',
-      '..tttttttt..',
-      '.ssttttttss.',
-      '.s.tttttt.s.',
-      '...tbbbbt...',
-      '...llllll...',
-      '...ll..ll...',
-      '...ll..ll...',
-      '...oo..oo...',
-      '..ooo..ooo..',
-      '............'
-    ];
-    if (o.horns) {
-      rows = ['..g......g..', '..g......g..'].concat(rows);
-    }
     const pal = {
-      h: o.hair || '#5a3a1e',
-      s: o.skin || '#e6b88a',
-      e: o.eye || '#1a1a24',
-      t: o.tunic || '#7a4a2a',
-      b: o.belt || '#42301a',
-      l: o.legs || '#4a3a2a',
+      h: o.hair || '#6b4423',
+      s: o.skin || '#eab28c',
+      e: o.eye || '#26222e',
+      t: o.tunic || '#6b4a2a',
+      b: o.belt || '#473018',
+      l: o.legs || '#4c3a2a',
       o: o.boots || '#33241a',
-      g: o.hornCol || '#d8b22a'
+      d: o.dress || shade(o.tunic || '#6b4a2a', 0.78),
+      g: '#e3b93f',
+      m: '#efe9dc',
+      w: '#f2efe6'
     };
-    return sprite(rows, pal);
+    function build(legs) {
+      let rows = HEAD_TORSO.slice();
+      if (o.mask) {
+        // maschera bianca in stile Jack of Blades, occhi rossi
+        rows[4] = '...hmmmmmmmmh...';
+        rows[5] = '...hmmemmemmh...';
+        rows[6] = '....mmmmmmmm....';
+        rows[7] = '....mmrmmrmm....'.replace(/r/g, 'e');
+        rows[8] = '.....mmmmmm.....';
+      }
+      if (o.brooch) {
+        rows[9] = '....ttgggttt....';
+        rows[10] = '...ttttggtttt...';
+      }
+      rows = rows.concat(o.dressed ? SKIRT : legs);
+      if (o.horns) {
+        rows = ['...g........g...', '...g........g...', '...gg......gg...'].concat(rows);
+      }
+      return sprite(rows, pal);
+    }
+    return { a: build(LEGS_A), b: o.dressed ? build(LEGS_A) : build(LEGS_B) };
   }
 
-  /* Bestia quadrupede 16x10 (cane, lupo) — guarda a destra */
+  /* ---------------- bestia quadrupede 18x12, due frame ---------------- */
+
   function beast(body, eye) {
-    const rows = [
-      '...........dd...',
-      '..........dddd..',
-      '..........dedd..',
-      'dd........dddd..',
-      '.dd......ddd....',
-      '.ddddddddddd....',
-      '.dddddddddd.....',
-      '.dd......dd.....',
-      '.dd......dd.....',
-      '................'
+    const pal = { w: body, e: eye || '#f2efe6', o: shade(body, 0.6), n: '#26222e' };
+    const A = [
+      '.............ww...',
+      '............wwww..',
+      '............wewwn.',
+      '.www........wwww..',
+      '..wwwwwwwwwwwww...',
+      '..wwwwwwwwwwwww...',
+      '..wwwwwwwwwwww....',
+      '..www.....www.....',
+      '..www.....www.....',
+      '..ooo.....ooo.....'
     ];
-    return sprite(rows, { d: body, e: eye || '#ffffff' });
+    const B = A.slice(0, 7).concat([
+      '...www.....www....',
+      '..www.......www...',
+      '..ooo.......ooo...'
+    ]);
+    return { a: sprite(A, pal), b: sprite(B, pal) };
+  }
+
+  /* ---------------- creature speciali ---------------- */
+
+  function balverine() {
+    const pal = { b: '#2e3140', y: '#ffd23a', w: '#d8d3c4', c: '#c9c2b8' };
+    const rows = [
+      '......bb......bb..',
+      '......bbb....bbb..',
+      '.......bbbbbbbb...',
+      '......bbbbbbbbbb..',
+      '......bbybbbybbb..',
+      '......bbbbbbbbbb..',
+      '.......bbwbbwbb...',
+      '....bbbbbbbbbb....',
+      '..bbbbbbbbbbbb....',
+      '.bbbbbbbbbbbbbb...',
+      '.bbb..bbbbbbbbbb..',
+      '.bbb..bbbbbbbbbb..',
+      '.ccc..bbbbbbbb....',
+      '......bbbbbbbb....',
+      '......bbbbbbb.....',
+      '.....bbbbbbbb.....',
+      '.....bbb..bbb.....',
+      '.....bbb..bbb.....',
+      '.....bbb..bbb.....',
+      '.....ccc..ccc.....'
+    ];
+    const s = sprite(rows, pal);
+    return { a: s, b: s };
+  }
+
+  function hobbe() {
+    const pal = { g: '#7d9440', y: '#d8452a', w: '#e8e3d0', t: '#5d4a2e', o: '#3a2c1c' };
+    const rows = [
+      '....gggggg....',
+      '...gggggggg...',
+      '..gggggggggg..',
+      '..ggyggggygg..',
+      '..gggggggggg..',
+      '...gggwwggg...',
+      '....gggggg....',
+      '..tttttttttt..',
+      '.tttttttttttt.',
+      '.g.tttttttt.g.',
+      '.g.tttttttt.g.',
+      '...tttttttt...',
+      '...ggg..ggg...',
+      '...ggg..ggg...',
+      '...ooo..ooo...'
+    ];
+    const s = sprite(rows, pal);
+    return { a: s, b: s };
   }
 
   function chicken() {
-    const rows = [
-      '....ww..',
-      '...wwww.',
-      '...wweb.',
-      '.wwwww..',
-      'wwwwww..',
-      '.wwww...',
-      '..y.y...',
-      '........'
+    const pal = { w: '#f2efe6', e: '#26222e', b: '#e0892a', y: '#d8a128', r: '#d8452a' };
+    const A = [
+      '.....r....',
+      '....ww....',
+      '...wwww...',
+      '...wweb...',
+      '.wwwww....',
+      'wwwwww....',
+      '.wwww.....',
+      '..y.y.....',
+      '..........'
     ];
-    return sprite(rows, { w: '#f2efe6', e: '#222222', b: '#e08a1e', y: '#d8a128' });
+    const B = [
+      '..........',
+      '.....r....',
+      '....ww....',
+      '...wweb...',
+      '.wwwww....',
+      'wwwwww....',
+      '.wwww.....',
+      '.y...y....',
+      '..........'
+    ];
+    return { a: sprite(A, pal), b: sprite(B, pal) };
   }
 
+  /* ---------------- oggetti ---------------- */
+
   function potionIcon(col) {
-    const rows = [
+    return sprite([
       '..kk..',
       '..kk..',
       '.pppp.',
       'pppppp',
       'pppppp',
       '.pppp.'
-    ];
-    return sprite(rows, { k: '#8a6a3a', p: col });
+    ], { k: '#8a6a3a', p: col });
   }
 
-  function sign() {
-    const rows = [
+  function signSprite() {
+    return sprite([
       'wwwwwwww',
       'wccccccw',
       'wccccccw',
       'wwwwwwww',
       '...ww...',
       '...ww...'
-    ];
-    return sprite(rows, { w: '#6a4a26', c: '#e8d8a8' });
+    ], { w: '#6b4423', c: '#e8d8a8' });
   }
 
-  function chest() {
-    const rows = [
+  function chestSprite() {
+    return sprite([
       '.cccccc.',
       'cccccccc',
       'cggggggc',
-      'cccgcccc' + '',
+      'cccgcccc',
       'cccccccc',
       '.cccccc.'
-    ];
-    return sprite(rows, { c: '#7a5226', g: '#d8b22a' });
+    ], { c: '#7a5226', g: '#e3b93f' });
   }
 
+  /* ---------------- catalogo ---------------- */
+
   S.build = function () {
-    S.hero = human({ hair: '#6a4520', tunic: '#3a5a8a', legs: '#4a3a2a' });
-    S.heroEvil = human({ hair: '#2a2230', tunic: '#5a1a26', legs: '#33222a', skin: '#d8c0a0' });
-    S.dog = beast('#9a7444', '#2a1c10');
-    S.wolf = beast('#777b85', '#d8e02a');
-    S.balverine = human({ hair: '#23262e', skin: '#3a3e4a', tunic: '#23262e', legs: '#1c1e26', eye: '#e0d22a', boots: '#1c1e26' });
-    S.bandit = human({ hair: '#2c2c2c', tunic: '#5a2a2a', legs: '#3a3a3a', belt: '#1e1e1e' });
-    S.hobbe = sprite([
-      '...gggg...',
-      '..gggggg..',
-      '..geggeg..',
-      '..gggggg..',
-      '.tttttttt.',
-      '.tttttttt.',
-      '..tttttt..',
-      '..gg..gg..',
-      '..gg..gg..',
-      '..........'
-    ], { g: '#7a8e3a', e: '#d82a2a', t: '#5a4a2e' });
-    S.hollow = human({ hair: '#2e3a2e', skin: '#cfd6c0', tunic: '#5a665a', legs: '#4a564a', eye: '#5ae06a' });
-    S.jack = human({ hair: '#8a1620', skin: '#e8e6df', tunic: '#7a1420', legs: '#3a1020', eye: '#e02a2a', horns: true });
-    S.mayor = human({ hair: '#bcbcbc', tunic: '#6a5a2a', legs: '#4a4a4a' });
-    S.granny = human({ hair: '#d8d8d8', tunic: '#7a4a6a', legs: '#5a4a5a' });
-    S.smith = human({ hair: '#3a2a1a', tunic: '#555560', legs: '#3a3a3a', belt: '#222222' });
-    S.farmer = human({ hair: '#8a6a2a', tunic: '#6a7a3a', legs: '#5a4a2a' });
-    S.villager = human({ hair: '#4a3018', tunic: '#5a6a4a', legs: '#4a3a2a' });
-    S.villagerF = human({ hair: '#7a3a1a', tunic: '#8a5a3a', legs: '#5a4030' });
-    S.guard = human({ hair: '#6a6a72', skin: '#e6b88a', tunic: '#7a8a9a', legs: '#55606a', belt: '#2a2a30' });
-    S.merchant = human({ hair: '#3a2a4a', tunic: '#8a6a2a', legs: '#5a4a3a' });
-    S.priest = human({ hair: '#e8e8e8', tunic: '#d8d0b0', legs: '#b8b098' });
-    S.seer = human({ hair: '#8a1620', skin: '#d8c0a0', tunic: '#8a1620', legs: '#5a1020' });
-    S.gravedigger = human({ hair: '#3a3a3a', tunic: '#4a4a52', legs: '#33333a' });
-    S.woundedBandit = human({ hair: '#2c2c2c', tunic: '#6a3a3a', legs: '#3a3a3a' });
+    S.hero = human({ hair: '#7a4a23', tunic: '#4f6f9f', legs: '#4c3a2a', belt: '#8a6a3a' });
+    S.heroEvil = human({ hair: '#2a2433', skin: '#d9c2a6', tunic: '#6e2233', legs: '#33222d', eye: '#c92a2a' });
+    S.dog = beast('#a87f4d', '#2a1c10');
+    S.wolf = beast('#6e7480', '#ffd23a');
+    S.balverine = balverine();
+    S.hobbe = hobbe();
+    S.bandit = human({ hair: '#2e2c2a', tunic: '#7a3030', legs: '#3e3c3a', belt: '#222020' });
+    S.hollow = human({ hair: '#3a4a3c', skin: '#cdd3bd', tunic: '#5a685a', legs: '#4c584c', eye: '#6fe08a' });
+    S.jack = human({
+      hair: '#8e2334', tunic: '#7c1f2e', legs: '#3c1622', boots: '#2a101a',
+      belt: '#d8b23a', eye: '#e03a3a', mask: true, horns: true, brooch: true
+    });
+    S.mayor = human({ hair: '#c4c4c4', tunic: '#7a6a30', legs: '#4c4c4c' });
+    S.granny = human({ hair: '#dcdcdc', tunic: '#8a5278', dressed: true });
+    S.smith = human({ hair: '#3a2c1c', tunic: '#5d5d68', legs: '#3e3c3a', belt: '#26222e' });
+    S.farmer = human({ hair: '#9a7430', tunic: '#7a8a40', legs: '#5d4a2e' });
+    S.villager = human({ hair: '#523a1e', tunic: '#62744e', legs: '#4c3a2a' });
+    S.villagerF = human({ hair: '#8a4420', tunic: '#9a6240', dressed: true });
+    S.guard = human({ hair: '#8f99a8', tunic: '#7d8ca0', legs: '#56606e', belt: '#2a2a30' });
+    S.merchant = human({ hair: '#43305c', tunic: '#a3802d', legs: '#5d4a3a' });
+    S.priest = human({ hair: '#ececec', tunic: '#ddd3b3', dressed: true, dress: '#c4ba9a' });
+    S.seer = human({ hair: '#8e2334', skin: '#d9c2a6', tunic: '#8e2334', dressed: true, dress: '#6e1a28' });
+    S.gravedigger = human({ hair: '#3e3e3e', tunic: '#4e4e58', legs: '#36363e' });
+    S.woundedBandit = human({ hair: '#2e2c2a', tunic: '#8a4040', legs: '#3e3c3a' });
     S.chicken = chicken();
-    S.potHp = potionIcon('#d23a3a');
-    S.potMp = potionIcon('#3a6ad2');
-    S.sign = sign();
-    S.chest = chest();
+    S.potHp = potionIcon('#d8452a');
+    S.potMp = potionIcon('#3f6fd0');
+    S.sign = signSprite();
+    S.chest = chestSprite();
   };
 
   S.forNpc = function (key) {
     return S[key] || S.villager;
+  };
+
+  /* sceglie il frame di camminata in base al movimento */
+  S.frameOf = function (spr, ent) {
+    if (spr.a === undefined) return spr; // sprite statico
+    return (ent && ent.moving && Math.floor((ent.anim || 0) * 0.6) % 2) ? spr.b : spr.a;
   };
 
   window.Sprites = S;

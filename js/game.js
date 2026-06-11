@@ -689,6 +689,7 @@
     if (input.up) dy -= 1;
     if (input.down) dy += 1;
 
+    p.moving = !!(dx || dy);
     if (dx || dy) {
       const len = Math.hypot(dx, dy);
       const sp = (150 + (p.skill - 1) * 8) * dt;
@@ -705,12 +706,14 @@
   function updateDog(dt) {
     const d = G.dog, p = G.player;
     d.anim += dt * 8;
+    d.moving = false;
     const dd = dist(d, p);
     if (dd > 44) {
       const sp = Math.min(220, 90 + dd) * dt;
       const dx = p.x - d.x, dy = p.y - d.y, len = Math.hypot(dx, dy) || 1;
       moveEntity(d, dx / len * sp, dy / len * sp, 6, 5);
       d.flip = dx < 0;
+      d.moving = true;
     }
     // attacca i nemici vicini
     if (d.barkT > 0) d.barkT -= dt;
@@ -728,6 +731,7 @@
       const dx = near.x - d.x, dy = near.y - d.y, len = Math.hypot(dx, dy) || 1;
       moveEntity(d, dx / len * 130 * dt, dy / len * 130 * dt, 6, 5);
       d.flip = dx < 0;
+      d.moving = true;
     }
     // fiuta i tesori
     for (const dig of G.region.digs) {
@@ -743,6 +747,7 @@
     const p = G.player;
     for (const e of G.region.enemies) {
       e.anim += dt * 8;
+      e.moving = false;
       if (e.hurtT > 0) e.hurtT -= dt;
       if (e.cd > 0) e.cd -= dt;
       const dp = dist(e, p);
@@ -754,6 +759,7 @@
           const dx = p.x - e.x, dy = p.y - e.y, len = Math.hypot(dx, dy) || 1;
           moveEntity(e, dx / len * speed * dt, dy / len * speed * dt);
           e.flip = dx < 0;
+          e.moving = true;
         } else if (e.cd <= 0) {
           e.cd = 1.0;
           damagePlayer(e.et.dmg);
@@ -788,6 +794,7 @@
         if (e.vx || e.vy) {
           moveEntity(e, e.vx * dt, e.vy * dt);
           if (e.vx) e.flip = e.vx < 0;
+          e.moving = true;
         }
       }
     }
@@ -798,12 +805,15 @@
     const evil = p.moral <= -40;
     for (const n of G.region.npcs) {
       if (n.dead) continue;
+      n.anim = (n.anim || 0) + dt * 8;
+      n.moving = false;
       if (n.fleeT > 0 || (evil && dist(n, p) < 90)) {
         if (n.fleeT <= 0) { n.fleeT = 1.2; Game.addText(n.x, n.y - 30, '!', '#ff5a5a'); }
         n.fleeT -= dt;
         const dx = n.x - p.x, dy = n.y - p.y, len = Math.hypot(dx, dy) || 1;
         moveEntity(n, dx / len * 120 * dt, dy / len * 120 * dt);
         n.flip = dx < 0;
+        n.moving = true;
         continue;
       }
       n.wanderT -= dt;
@@ -820,6 +830,7 @@
       if (n.vx || n.vy) {
         moveEntity(n, n.vx * dt, n.vy * dt);
         if (n.vx) n.flip = n.vx < 0;
+        n.moving = true;
       }
       // i cuori per l'eroe buono
       if (p.moral >= 40 && dist(n, p) < 70 && Math.random() < dt * 0.5) {
@@ -831,10 +842,13 @@
   function updateChickens(dt) {
     for (const c of G.region.chickens) {
       if (c.caught) continue;
+      c.anim = (c.anim || 0) + dt * 8;
+      c.moving = false;
       if (c.kicked > 0) {
         c.kicked -= dt;
         moveEntity(c, c.vx * dt, c.vy * dt, 5, 4);
         c.vx *= 0.92; c.vy *= 0.92;
+        c.moving = true;
         continue;
       }
       c.t -= dt;
@@ -847,6 +861,7 @@
       if (c.vx || c.vy) {
         moveEntity(c, c.vx * dt, c.vy * dt, 5, 4);
         if (c.vx) c.flip = c.vx < 0;
+        c.moving = true;
       }
     }
   }
