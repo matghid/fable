@@ -1,5 +1,8 @@
 name: fetch-assets
-on: workflow_dispatch
+on:
+  push:
+    branches: [claude/jolly-goldberg-p8bcee]
+    paths: ['.github/workflows/fetch-assets.yml']
 permissions:
   contents: write
 jobs:
